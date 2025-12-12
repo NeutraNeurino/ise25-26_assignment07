@@ -1,3 +1,5 @@
+// Gpt 5.1 hat meinen bestehenden Code umgeschrieben, das hier ist das Ergebnis. (MARKIERUNG GPT VERWENDUNG und so)
+
 package de.seuhd.campuscoffee.api.controller;
 
 import de.seuhd.campuscoffee.api.dtos.ReviewDto;
@@ -25,7 +27,7 @@ import static de.seuhd.campuscoffee.api.openapi.Resource.REVIEW;
 /**
  * Controller for handling reviews for POS, authored by users.
  */
-@Tag(name="Reviews", description="Operations for managing reviews for points of sale.")
+@Tag(name = "Reviews", description = "Operations for managing reviews for points of sale.")
 @Controller
 @RequestMapping("/api/reviews")
 @Slf4j
@@ -34,12 +36,13 @@ public class ReviewController extends CrudController<Review, ReviewDto, Long> {
 
     private final ReviewService reviewService;
     private final ReviewDtoMapper reviewDtoMapper;
-@Override
+
+    @Override
     protected @NonNull CrudService<Review, Long> service() {
         return reviewService;
     }
 
-@Override
+    @Override
     protected @NonNull DtoMapper<Review, ReviewDto> mapper() {
         return reviewDtoMapper;
     }
@@ -52,18 +55,19 @@ public class ReviewController extends CrudController<Review, ReviewDto, Long> {
     }
 
     @Operation
-    @CrudOperation(operation=GET_BY_ID, resource=REVIEW)
-    @GetMapping("/{id}") // Adrian, ich hab den Enum-Wert hier angepasst, der war falsch --- IGNORE ---
+    @CrudOperation(operation = GET_BY_ID, resource = REVIEW)
+    @GetMapping("/{id}")
     public @NonNull ResponseEntity<ReviewDto> getById(@PathVariable Long id) {
         return super.getById(id);
     }
+
     @Operation
     @CrudOperation(operation = CREATE, resource = REVIEW)
     @PostMapping("")
     public @NonNull ResponseEntity<ReviewDto> create(@Valid @RequestBody ReviewDto dto) {
         return super.create(dto);
     }
-    
+
     @Operation
     @CrudOperation(operation = UPDATE, resource = REVIEW)
     @PutMapping("/{id}")
@@ -89,12 +93,11 @@ public class ReviewController extends CrudController<Review, ReviewDto, Long> {
             @RequestParam("approved") Boolean approved
     ) {
         log.debug("Filtering reviews for posId={} and approved={}", posId, approved);
-        var reviews = reviewService.filter(posId, approved);
-    var dtos = reviews.stream()
-            .map(reviewDtoMapper::fromDomain)
-            .toList();
-    return ResponseEntity.ok(dtos);
-}
+        var reviews = reviewService.filter(posId, approved);             // List<Review>
+        var dtos = reviews.stream()
+                .map(reviewDtoMapper::fromDomain)                        // Review -> ReviewDto
+                .toList();
+        return ResponseEntity.ok(dtos);                                  // List<ReviewDto>
     }
 
     @Operation(summary = "Approve a review for a user.")
@@ -104,6 +107,8 @@ public class ReviewController extends CrudController<Review, ReviewDto, Long> {
             @RequestParam("user_id") Long userId
     ) {
         log.debug("Approving review {} by user {}", id, userId);
-        return ResponseEntity.ok(reviewService.approve(id, userId));
+        var review = reviewService.getById(id);                          // lädt Review-Domain-Objekt
+        var approvedReview = reviewService.approve(review, userId);      // Business-Logik aus Service
+        return ResponseEntity.ok(reviewDtoMapper.fromDomain(approvedReview));
     }
 }
