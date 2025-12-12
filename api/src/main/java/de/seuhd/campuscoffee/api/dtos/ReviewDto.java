@@ -12,15 +12,17 @@ import java.time.LocalDateTime;
  */
 @Builder(toBuilder = true)
 public record ReviewDto(
-        @Nullable Long id,                    // null when creating a new review
-        @Nullable LocalDateTime createdAt,    // null when creating a new review
-        @Nullable LocalDateTime updatedAt,    // null when creating a new review
-
-        @NotNull Long posId,                  // never null
-        @NotNull Long authorId,               // never null
-
-        @NotBlank String review,              // must not be null or empty
-
-        @Nullable Boolean approved            // not present (null) when creating a new review
+        @Nullable Long id,
+        @Nullable LocalDateTime createdAt,
+        @Nullable LocalDateTime updatedAt,
+        @NotNull Long posId,
+        @NotNull Long authorId,
+        @NotBlank String review,
+        @Nullable Boolean approved
 ) implements Dto<Long> {
+
+    @Override
+    public Long getId() {
+        return id;
+    }
 }
