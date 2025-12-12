@@ -1,6 +1,9 @@
+//diese Version des Codes ist von GPT 5.1 generiert. (Ich hoffe, diese Markierung entspricht den Vorgaben)
+
 package de.seuhd.campuscoffee.domain.implementation;
 
 import de.seuhd.campuscoffee.domain.configuration.ApprovalConfiguration;
+import de.seuhd.campuscoffee.domain.exceptions.ValidationException;
 import de.seuhd.campuscoffee.domain.model.objects.Review;
 import de.seuhd.campuscoffee.domain.ports.api.ReviewService;
 import de.seuhd.campuscoffee.domain.ports.data.CrudDataService;
@@ -20,16 +23,19 @@ import java.util.List;
 @Slf4j
 @Service
 public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements ReviewService {
+
     private final ReviewDataService reviewDataService;
     private final UserDataService userDataService;
     private final PosDataService posDataService;
-    // TODO: Try to find out the purpose of this class and how it is connected to the application.yaml configuration file.
+    // Reads the minimum approval count from application.yaml via ApprovalConfiguration.
     private final ApprovalConfiguration approvalConfiguration;
 
-    public ReviewServiceImpl(@NonNull ReviewDataService reviewDataService,
-                             @NonNull UserDataService userDataService,
-                             @NonNull PosDataService posDataService,
-                             @NonNull ApprovalConfiguration approvalConfiguration) {
+    public ReviewServiceImpl(
+            @NonNull ReviewDataService reviewDataService,
+            @NonNull UserDataService userDataService,
+            @NonNull PosDataService posDataService,
+            @NonNull ApprovalConfiguration approvalConfiguration
+    ) {
         super(Review.class);
         this.reviewDataService = reviewDataService;
         this.userDataService = userDataService;
@@ -45,9 +51,31 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
     @Override
     @Transactional
     public @NonNull Review upsert(@NonNull Review review) {
-        // TODO: Implement the missing business logic here
+        log.info("Upserting review with ID '{}'...", review.getId());
 
-        return super.upsert(review);
+        // Sicherstellen, dass POS und User existieren (würde sonst eine passende Exception werfen)
+        var pos = posDataService.getById(review.pos().getId());
+        var author = userDataService.getById(review.author().getId());
+
+        // Business-Regel: Ein User darf nur EIN Review pro POS abgeben.
+        // Für neue Reviews (id == null) darf es noch keinen Datensatz mit gleicher POS-/Author-Kombination geben.
+        boolean alreadyReviewed = reviewDataService.getAll().stream()
+                .anyMatch(existing ->
+                        existing.pos().getId().equals(pos.getId())
+                                && existing.author().getId().equals(author.getId())
+                                // Falls wir ein bestehendes Review updaten, nicht mit sich selbst vergleichen
+                                && (review.getId() == null || !existing.getId().equals(review.getId()))
+                );
+
+        if (alreadyReviewed) {
+            throw new ValidationException("A user cannot submit more than one review per POS.");
+        }
+
+        // Approval-Status konsistent zum approvalCount setzen
+        Review normalized = updateApprovalStatus(review);
+
+        // Delegation an generische CRUD-Logik
+        return super.upsert(normalized);
     }
 
     @Override
@@ -62,22 +90,27 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
         log.info("Processing approval request for review with ID '{}' by user with ID '{}'...",
                 review.getId(), userId);
 
-        // validate that the user exists
-        // TODO: Implement the required business logic here
+        // 1) Prüfen, ob der approvende Nutzer existiert
+        userDataService.getById(userId); // wir nutzen das Objekt nicht, aber die Methode stellt die Existenz sicher
 
-        // validate that the review exists
-        // TODO: Implement the required business logic here
+        // 2) Review aus der Datenbank laden (stellt Existenz sicher und sorgt für frischen Zustand)
+        Review persisted = reviewDataService.getById(review.getId());
 
-        // a user cannot approve their own review
-        // TODO: Implement the required business logic here
+        // 3) Nutzer darf sein eigenes Review nicht genehmigen
+        if (persisted.author().getId().equals(userId)) {
+            throw new ValidationException("Users are not allowed to approve their own reviews.");
+        }
 
-        // increment approval count
-        // TODO: Implement the required business logic here
+        // 4) Approval-Count erhöhen
+        persisted = persisted.toBuilder()
+                .approvalCount(persisted.approvalCount() + 1)
+                .build();
 
-        // update approval status to determine if the review now reaches the approval quorum
-        // TODO: Implement the required business logic here
+        // 5) Approval-Status anhand der konfigurierten Mindestanzahl aktualisieren
+        persisted = updateApprovalStatus(persisted);
 
-        return reviewDataService.upsert(review);
+        // 6) Speichern
+        return reviewDataService.upsert(persisted);
     }
 
     /**
@@ -93,10 +126,10 @@ public class ReviewServiceImpl extends CrudServiceImpl<Review, Long> implements 
                 .approved(isApproved(review))
                 .build();
     }
-    
+
     /**
      * Determines if a review meets the minimum approval threshold.
-     * 
+     *
      * @param review The review to check
      * @return true if the review meets or exceeds the minimum approval count, false otherwise
      */
