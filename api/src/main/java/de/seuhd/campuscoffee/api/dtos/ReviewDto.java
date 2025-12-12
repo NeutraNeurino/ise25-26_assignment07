@@ -1,10 +1,10 @@
 package de.seuhd.campuscoffee.api.dtos;
 
-import de.seuhd.campuscoffee.api.dtos.base.Dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.jspecify.annotations.Nullable;
 import lombok.Builder;
+import org.jspecify.annotations.Nullable;
+
 import java.time.LocalDateTime;
 
 /**
@@ -12,12 +12,15 @@ import java.time.LocalDateTime;
  */
 @Builder(toBuilder = true)
 public record ReviewDto(
-        @Nullable Long id,
-        @Nullable LocalDateTime createdAt,
-        @Nullable LocalDateTime updatedAt,
-        @NotNull Long posId,
-        @NotNull Long authorId,
-        @NotBlank String review,
-        @Nullable Boolean approved
+        @Nullable Long id,                    // null when creating a new review
+        @Nullable LocalDateTime createdAt,    // null when creating a new review
+        @Nullable LocalDateTime updatedAt,    // null when creating a new review
+
+        @NotNull Long posId,                  // never null
+        @NotNull Long authorId,               // never null
+
+        @NotBlank String review,              // must not be null or empty
+
+        @Nullable Boolean approved            // not present (null) when creating a new review
 ) implements Dto<Long> {
 }
